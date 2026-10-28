@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+*.zip
+*.tar.gz
+__pycache__/
+.openai/
+*backup*.json
+*Backup*.json
+.env
+.env.*
