@@ -2,7 +2,7 @@
 
 Date: 2026-11-03 (UTC)
 
-**35 automated tests passed; 0 failed, cancelled, skipped, or pending.**
+**36 automated tests passed; 0 failed, cancelled, skipped, or pending.**
 
 | Check | Result |
 | --- | --- |
@@ -15,7 +15,7 @@ Date: 2026-11-03 (UTC)
 | Local persistence | Serialized atomic snapshots, reopen, quota/write failure, and cross-tab conflict behavior passed using an asynchronous transactional IDB double |
 | Native speech integration | Local nl-NL preference, direct invocation, voice changes, offline missing-voice feedback, cancellation races, and API absence passed using speech test doubles |
 | App controller | Resume, reveal/rate gating, spelling results, typing shortcuts, independent modes/decks/settings, CSV previews, imports, exports, resets, undo, and relaunch passed in the DOM harness |
-| Offline worker | All 17 assets cached; subdirectory launch, query URLs, navigation/assets offline, cache status, activation/update, failed precache, unrelated request passthrough passed in a worker harness |
+| Offline worker | All 17 assets cached; subdirectory launch, query URLs, navigation/assets offline, cache status, activation/update, stale HTTP-cache bypass, failed precache, unrelated request passthrough passed in a worker harness |
 | Static package | 109 unique HTML IDs; controller references resolved; responsive CSS/safe-area/reduced-motion checks; manifest, PNG sizes, cache hash, and JavaScript syntax passed |
 
 Commands completed successfully:
@@ -26,7 +26,7 @@ node scripts/check.mjs
 node --test tests/*.test.mjs
 ```
 
-The test suite includes 35 test records, counting the app controller's seven nested scenarios and its parent record. Test runtime was under 2 seconds on the supplied Node 24 environment.
+The test suite includes 36 test records, counting the app controller's seven nested scenarios and its parent record. Test runtime was under 2 seconds on the supplied Node 24 environment.
 
 ## Verification boundary
 

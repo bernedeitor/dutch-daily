@@ -9,6 +9,7 @@ async function walk(dir) {
 }
 const files = (await walk(root)).filter(p => !['sw.js','_headers','.nojekyll'].includes(relative(root,p))).sort();
 const hash = createHash('sha256');
+hash.update(await readFile(new URL(import.meta.url)));
 for (const file of files) { hash.update(relative(root,file)); hash.update(await readFile(file)); }
 const version = hash.digest('hex').slice(0,16);
 const assets = files.map(p => './' + relative(root,p).replaceAll('\\','/'));
@@ -20,7 +21,8 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     // Cache every required asset atomically before this version is usable.
-    try { await cache.addAll(urls); }
+    // Ignore old HTTP-cache responses when installing a new app version.
+    try { await cache.addAll(urls.map(url => new Request(url, { cache: 'reload' }))); }
     catch (error) { await caches.delete(CACHE_NAME); throw error; }
   })());
 });

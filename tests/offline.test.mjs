@@ -3,17 +3,17 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source=readFileSync(new URL('../docs/sw.js',import.meta.url),'utf8');
-function harness({scope='https://example.test/study/dutch/',fail=false}={}){
+function harness({scope='https://example.test/study/dutch/',fail=false,staleHTTP=false}={}){
  const handlers={},stores=new Map(),fetched=[];let claimed=false,skipped=false;
  const keyOf=(r,ignore=false)=>{const u=new URL(typeof r==='string'?r:r.url);if(ignore)u.search='';return u.href;};
  const caches={
   async open(name){if(!stores.has(name))stores.set(name,new Map());const store=stores.get(name);return {
-   async addAll(urls){if(fail)throw new Error('Network failed');for(const url of urls){const path=new URL(url).pathname.slice(new URL(scope).pathname.length);store.set(url,new Response(readFileSync(new URL('../docs/'+path,import.meta.url))));}},
+   async addAll(requests){if(fail)throw new Error('Network failed');for(const request of requests){const url=typeof request==='string'?request:request.url;const path=new URL(url).pathname.slice(new URL(scope).pathname.length);const bytes=staleHTTP&&request.cache!=='reload'?'Previous application asset':readFileSync(new URL('../docs/'+path,import.meta.url));store.set(url,new Response(bytes));}},
    async match(req,options={}){const key=keyOf(req,options.ignoreSearch);const item=[...store.entries()].find(([k])=>keyOf(k,options.ignoreSearch)===key);return item?.[1].clone();}
   };},async keys(){return [...stores.keys()];},async delete(name){return stores.delete(name);}
  };
  const self={registration:{scope},location:{origin:new URL(scope).origin},clients:{async claim(){claimed=true;}},skipWaiting(){skipped=true;},addEventListener:(name,fn)=>{handlers[name]=fn;}};
- vm.runInNewContext(source,{self,caches,URL,fetch:async r=>{fetched.push(r);throw new Error('Offline');}});
+ vm.runInNewContext(source,{self,caches,URL,Request,fetch:async r=>{fetched.push(r);throw new Error('Offline');}});
  async function event(name,props={}){let wait=Promise.resolve(),response;handlers[name]({...props,waitUntil:p=>{wait=p;},respondWith:p=>{response=p;}});await wait;return response?await response:null;}
  return {event,stores,fetched,get claimed(){return claimed;},get skipped(){return skipped;},scope};
 }
@@ -31,6 +31,11 @@ test('cache status verifies every required asset, and activation removes only ol
 });
 test('failed precache never leaves a partial version ready for installation',async()=>{
  const h=harness({fail:true});await assert.rejects(h.event('install'),/Network failed/);assert.equal(h.stores.size,0);
+});
+test('updates install the current profile interface even when HTTP cache contains old assets',async()=>{
+ const h=harness({staleHTTP:true});await h.event('install');
+ const shell=await h.event('fetch',{request:{method:'GET',url:h.scope,mode:'navigate'}});assert.match(await shell.text(),/id="profile-select"/);
+ const script=await h.event('fetch',{request:{method:'GET',url:h.scope+'profiles.js',mode:'cors'}});assert.match(await script.text(),/profileWorkspace/);
 });
 test('worker leaves external requests, writes, and non-app assets alone',async()=>{
  const h=harness();for(const request of [{method:'POST',url:h.scope+'app.js',mode:'cors'},{method:'GET',url:'https://other.test/app.js',mode:'cors'},{method:'GET',url:h.scope+'not-ours.png',mode:'cors'}])assert.equal(await h.event('fetch',{request}),null);assert.equal(h.fetched.length,0);

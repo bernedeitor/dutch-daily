@@ -15,6 +15,7 @@ const manifest=JSON.parse(readFileSync(resolve(dist,'manifest.webmanifest'),'utf
 for(const icon of manifest.icons){const file=readFileSync(resolve(dist,icon.src)),[w,h]=icon.sizes.split('x').map(Number);assert.equal(file.readUInt32BE(16),w);assert.equal(file.readUInt32BE(20),h);}
 function walk(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(resolve(dir,e.name)):[resolve(dir,e.name)]);}
 const files=walk(dist).filter(p=>!['sw.js','_headers','.nojekyll'].includes(relative(dist,p))).sort();const hash=createHash('sha256');
+hash.update(readFileSync(resolve(root,'scripts/prepare.mjs')));
 for(const p of files){hash.update(relative(dist,p));hash.update(readFileSync(p));}
 const expected=hash.digest('hex').slice(0,16),sw=readFileSync(resolve(dist,'sw.js'),'utf8');assert.ok(sw.includes(`dutch-daily-${expected}`),'Offline cache is stale: run npm run prepare:pwa');
 for(const file of walk(dist).concat(walk(resolve(root,'scripts'))).filter(p=>/\.(m?js)$/.test(p))){const check=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});assert.equal(check.status,0,check.stderr);}
