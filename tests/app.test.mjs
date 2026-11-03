@@ -23,6 +23,13 @@ const file=(name,data)=>({name,size:data.length,text:async()=>data});
 test('app controller: resume, reveal/rate, spelling, deck/selection isolation, import/export, reset/undo, reload',async t=>{
  let dom=setup(),$=id=>document.getElementById(id);
  await import('../docs/app.js?first');await until(()=>$('save-status').textContent==='Saved on this device','boot');
+ await t.test('voice tests and missing-Dutch errors are visible inside Settings',async()=>{
+  $('open-settings').click();$('test-voice').click();assert.match($('voice-test-status').textContent,/Speaking Dutch: Dutch/);assert.match($('voice-detail').textContent,/Selected Dutch voice/);
+  const original=speechSynthesis.getVoices, count=spoken.length;
+  speechSynthesis.getVoices=()=>[{lang:'en-US',name:'English',voiceURI:'en',localService:true}];
+  $('refresh-voices').click();$('test-voice').click();assert.equal(spoken.length,count);assert.match($('voice-test-status').textContent,/No Dutch voice/);assert.equal($('voice-test-status').classList.contains('error'),true);
+  speechSynthesis.getVoices=original;$('refresh-voices').click();document.querySelector('[aria-label="Close settings"]').click();
+ });
  await t.test('public decks start fresh; cannot rate an unrevealed card',async()=>{
   assert.equal($('stat-learned').textContent,'0');assert.equal($('stat-learning').textContent,'20');assert.equal($('stat-remaining').textContent,'480');
   const buttons=document.querySelectorAll('[data-rating]');buttons[3].click();assert.equal($('session-count').textContent,'0');

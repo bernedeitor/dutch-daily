@@ -17,6 +17,7 @@ function toast(message) {
 function showDialog(id) {
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   if (id === 'settings-dialog') {
+    speech?.refresh();
     renderVoices(); $('undo-import').hidden = !state?.restorePoint;
     $('profile-caption').textContent = workspace ? `Current profile: ${currentProfile(workspace).name}. Each profile keeps its own decks, ratings, and settings on this device.` : '';
     $('reset-caption').textContent = state ? `${deckLabel(currentDeck)} · ${modeLabel(state.ui.mode)}. The other mode is kept.` : '';
@@ -111,6 +112,7 @@ function renderControls() {
 }
 function audioStatus(text, type = 'ready') {
   $('audio-status').textContent = text; $('audio-status').classList.toggle('error', type === 'error');
+  $('voice-test-status').textContent = text; $('voice-test-status').classList.toggle('error', type === 'error');
   $('study-card').classList.toggle('speaking', type === 'speaking');
 }
 function playAudio(slow = false) {
@@ -192,12 +194,12 @@ function setSelection(mix) {
 }
 function renderVoices() {
   if (!speech) return;
-  const options = [new Option('Automatic · nl-NL', '')];
+  const options = [new Option('Automatic · Dutch only', '')];
   for (const voice of speech.voices) options.push(new Option(`${voice.name} · ${voice.lang}${voice.localService ? ' · on device' : ' · network'}`, voice.voiceURI));
   $('voice-select').replaceChildren(...options);
   $('voice-select').value = speech.voices.some(v => v.voiceURI === state?.ui.voice) ? state.ui.voice : '';
   const voice = speech.selectedVoice();
-  $('voice-detail').textContent = voice ? `${voice.name} · ${voice.lang}. ${voice.localService ? 'On-device voice available for offline use.' : 'This voice may need an internet connection.'}` : 'No Dutch voice is listed yet. The app will request nl-NL from your device. Download a Dutch voice in iPhone Settings for offline audio.';
+  $('voice-detail').textContent = voice ? `Selected Dutch voice: ${voice.name} · ${voice.lang}. ${voice.localService ? 'On-device voice available for offline use.' : 'This voice may need an internet connection.'}` : 'No Dutch voice detected. Download a Dutch / Nederlands voice in iPhone Settings → Accessibility → Read & Speak (or Spoken Content) → Voices. Return here and tap Refresh Dutch voices.';
 }
 function downloadFile(name, data, type = 'application/json') {
   const blob = new Blob([data], { type: `${type};charset=utf-8` }), url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -375,6 +377,11 @@ function bindEvents() {
   $('speech-rate').addEventListener('change', () => { if (!state || locked) return; state.ui.rate = Number($('speech-rate').value); speech.rate = state.ui.rate; void persist(); });
   $('autoplay').addEventListener('change', () => { if (!state || locked) return; state.ui.autoplay = $('autoplay').checked; void persist(); });
   $('test-voice').addEventListener('click', () => { audioStarted = true; speech.speak('Goedemorgen'); });
+  $('refresh-voices').addEventListener('click', () => {
+    speech.refresh();
+    const voice = speech.selectedVoice();
+    audioStatus(voice ? `Dutch voice detected: ${voice.name} · ${voice.lang}. Tap Try “Goedemorgen”.` : 'No Dutch voice detected. Download a Dutch / Nederlands voice on this device, then refresh again.', voice ? 'ready' : 'error');
+  });
   $('export-all').addEventListener('click', exportAll); $('emergency-export').addEventListener('click', exportAll);
   $('export-python').addEventListener('click', () => { if (!currentDeck) return; scheduler.save(); downloadFile(currentDeck.name.replace(/\.csv$/i, '.json'), JSON.stringify(currentDeck.progress, null, 2)); });
   $('export-csv').addEventListener('click', () => { if (currentDeck) downloadFile(currentDeck.name, toCSV(currentDeck.cards), 'text/csv'); });
@@ -400,7 +407,8 @@ function bindEvents() {
   $('native-install').addEventListener('click', async () => { if (installPrompt) { await installPrompt.prompt(); installPrompt = null; $('native-install').hidden = true; } });
   window.addEventListener('online', renderConnection); window.addEventListener('offline', renderConnection);
   window.addEventListener('pagehide', () => speech?.stop());
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') speech?.stop(); else { renderStats(); renderConnection(); } });
+  window.addEventListener('focus', () => speech?.refresh());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') speech?.stop(); else { speech?.refresh(); renderStats(); renderConnection(); } });
   document.addEventListener('keydown', event => {
     if (!scheduler || locked || event.repeat || event.metaKey || event.ctrlKey || event.altKey || document.querySelector('dialog[open]')) return;
     const target = event.target, typing = target instanceof Element && (target.closest('input,textarea,select') || target.isContentEditable);
