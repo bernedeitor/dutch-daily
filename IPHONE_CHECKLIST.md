@@ -8,3 +8,5 @@
 6. At your normal text size (and a larger accessibility size), check that buttons are reachable, text stays inside the card, and the spelling keyboard doesn't cover the input/check button. The app scrolls naturally when needed.
 
 Safari and the Home Screen app may have separate progress. Transfer a backup into the installed app if you practiced in Safari first.
+
+7. Create a second profile using **New profile**, verify it starts fresh, and switch back. Import a backup into the original profile and verify the second profile stays unchanged. Close/reopen and confirm the active profile persists.

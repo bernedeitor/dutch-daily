@@ -45,6 +45,14 @@ The four stats are Learning, Learned, Due (a subset of Learned), and Remaining (
 
 Spelling ignores case, repeated spaces, and trailing `. ! ? …`; accents and other spelling remain significant. A result never rates itself: you select a rating after checking or revealing the answer.
 
+## Profiles and sharing
+
+Anyone can open the same GitHub Pages link on their phone and study. Each browser saves its own progress. Use **Your profile → New profile** when several learners share one device. A new profile starts with both bundled decks and independent Flashcards and Listening progress. Rename the current profile in Settings.
+
+Existing installations migrate automatically into **My progress**, retaining all decks, card states, mode settings, and the last import/reset undo point. Importing a backup or resetting a mode affects only the selected profile. Full backups export that profile, with an optional `profile_name` label; older backups remain compatible. Python deck JSON exports keep their v3 format.
+
+Profiles are local conveniences, without passwords or cloud accounts. They do not automatically sync between phones or computers. Export a backup from the selected profile and import it on the other device to move progress. Anyone using the same browser can select its local profiles. A friend's separate device cannot read your device's saved progress through the app link.
+
 ## Decks, imports, and backups
 
 **Add CSV:** use the `+` button. The first two columns must contain Dutch and meaning, with a header row. Comma, semicolon, tab, BOM, CRLF, quoted commas, multiline fields, and escaped quotes are supported. Empty or duplicate Dutch rows are skipped, matching the original. Adding a CSV with the same filename updates that deck while retaining matching progress in both modes. Unmatched states are kept for a corrected CSV.
@@ -55,7 +63,7 @@ Spelling ignores case, repeated spaces, and trailing `. ! ? …`; accents and ot
 
 **Export current deck JSON:** produces Python-compatible v3 progress. Copy it back to the Python app's `progress/<deck-stem>.json`, beside the matching CSV. Both tracks are included. **Export current deck CSV** exports the actual deck content.
 
-Imports and current-mode resets keep one local restore point. **Settings → Undo last import or reset** restores it. The restore point is intentionally not included in exported backups. Full backup restoration replaces all current decks and progress; the import preview says so explicitly.
+Imports and current-mode resets keep one local restore point. **Settings → Undo last import or reset** restores it. The restore point is intentionally not included in exported backups. Full backup restoration replaces the selected profile’s decks and progress; the import preview says so explicitly.
 
 Progress is stored in **IndexedDB** with atomic transactions. Saves are serialized; another tab cannot silently overwrite newer progress. Storage failures pause further edits and offer an emergency export. Device-local storage is not cloud synchronization. Export occasional backups, especially before clearing browser data, switching phones, or moving hosts.
 

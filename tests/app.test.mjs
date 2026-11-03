@@ -17,7 +17,8 @@ function setup(){
  URL.createObjectURL=blob=>{blobs.push(blob);return 'blob:test-'+blobs.length;};URL.revokeObjectURL=()=>{};
  return dom;
 }
-const stored=()=>idb.databases.get('dutch-daily')?.data.get('main')?.data;
+const storedWorkspace=()=>idb.databases.get('dutch-daily')?.data.get('main')?.data;
+const stored=()=>{const raw=storedWorkspace();return raw?.schema===2?raw.profiles.find(p=>p.id===raw.activeProfile).data:raw;};
 const file=(name,data)=>({name,size:data.length,text:async()=>data});
 test('app controller: resume, reveal/rate, spelling, deck/selection isolation, import/export, reset/undo, reload',async t=>{
  let dom=setup(),$=id=>document.getElementById(id);
@@ -61,5 +62,20 @@ test('app controller: resume, reveal/rate, spelling, deck/selection isolation, i
  });
  await t.test('reopening uses persisted custom deck and progress instead of reseeding',async()=>{
   dom=setup();$=id=>document.getElementById(id);await import('../docs/app.js?reload');await until(()=>$('save-status').textContent==='Saved on this device');assert.equal($('deck-select').value,'my_dutch.csv');assert.equal($('stat-learned').textContent,'1');assert.equal(document.querySelectorAll('option').filter(o=>o.value==='my_dutch.csv').length,1);
+ });
+ await t.test('profiles isolate decks, ratings, imports, settings, and survive reopening',async()=>{
+  const original=$('profile-select').value, before=clone(stored());
+  $('new-profile').click();assert.equal($('profile-dialog').open,true);$('profile-name').value='Friend';$('profile-form').dispatchEvent({type:'submit',preventDefault(){}});
+  await until(()=>$('profile-select').value!==original);await until(()=>$('save-status').textContent==='Saved on this device');
+  const friend=$('profile-select').value;assert.equal($('deck-select').value,'500_common_dutch_flashcards.csv');assert.equal($('stat-learned').textContent,'0');assert.equal(stored().decks.length,2);
+  $('mode-listening').click();$('selection-mix').click();await until(()=>$('save-status').textContent==='Saved on this device');
+  $('profile-select').value=original;$('profile-select').dispatchEvent({type:'change'});await until(()=>$('save-status').textContent==='Saved on this device');
+  assert.equal($('deck-select').value,'my_dutch.csv');assert.equal($('stat-learned').textContent,'1');
+  for(let i=0;i<before.decks.length;i++)for(const mode of ['flashcards','listening'])assert.deepEqual(stored().decks[i].progress.tracks[mode].cards,before.decks[i].progress.tracks[mode].cards);
+  $('open-settings').click();$('rename-profile').click();$('profile-name').value='Benjamin';$('profile-form').dispatchEvent({type:'submit',preventDefault(){}});await until(()=>$('save-status').textContent==='Saved on this device');
+  $('export-all').click();const namedBackup=JSON.parse(await blobs.at(-1).text());assert.equal(namedBackup.profile_name,'Benjamin');assert.equal(namedBackup.decks.length,3);assert.equal(namedBackup.profiles,undefined);
+  $('progress-file').files=[file('backup.json',JSON.stringify(namedBackup))];$('progress-file').dispatchEvent({type:'change'});await until(()=>$('import-dialog').open);assert.match($('import-description').textContent,/Other profiles are kept/);$('confirm-import').click();await until(()=>$('save-status').textContent==='Saved on this device');assert.equal(storedWorkspace().profiles.length,2);
+  $('profile-select').value=friend;$('profile-select').dispatchEvent({type:'change'});await until(()=>$('save-status').textContent==='Saved on this device');assert.equal($('mode-listening').getAttribute('aria-pressed'),'true');assert.equal($('selection-mix').getAttribute('aria-pressed'),'true');assert.equal($('stat-learned').textContent,'0');
+  dom=setup();$=id=>document.getElementById(id);await import('../docs/app.js?profiles-reload');await until(()=>$('save-status').textContent==='Saved on this device');assert.equal($('profile-select').value,friend);assert.equal(storedWorkspace().profiles.length,2);
  });
 });

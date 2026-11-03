@@ -18,8 +18,8 @@ function harness({scope='https://example.test/study/dutch/',fail=false}={}){
  return {event,stores,fetched,get claimed(){return claimed;},get skipped(){return skipped;},scope};
 }
 test('precache is complete; app, both CSV decks, and progress are available offline under a subdirectory',async()=>{
- const h=harness();await h.event('install');assert.equal(h.stores.size,1);const cache=[...h.stores.values()][0];assert.equal(cache.size,16);
- for(const path of ['index.html','app.js','core.js','storage.js','speech.js','styles.css','manifest.webmanifest','decks/500_common_dutch_flashcards.csv','decks/100_common_dutch_phrases.csv','progress/500_common_dutch_flashcards.json'])assert.ok(cache.has(h.scope+path),path);
+ const h=harness();await h.event('install');assert.equal(h.stores.size,1);const cache=[...h.stores.values()][0];assert.equal(cache.size,17);
+ for(const path of ['index.html','app.js','core.js','storage.js','profiles.js','speech.js','styles.css','manifest.webmanifest','decks/500_common_dutch_flashcards.csv','decks/100_common_dutch_phrases.csv','progress/500_common_dutch_flashcards.json'])assert.ok(cache.has(h.scope+path),path);
  const request={method:'GET',url:h.scope+'?launch=home',mode:'navigate'};const response=await h.event('fetch',{request});assert.match(await response.text(),/Dutch, daily/);assert.equal(h.fetched.length,0);
  for(const path of ['app.js','decks/100_common_dutch_phrases.csv','icons/icon-192.png']){const r=await h.event('fetch',{request:{method:'GET',url:h.scope+path+'?cache=1',mode:'cors'}});assert.ok(r.ok);}
 });

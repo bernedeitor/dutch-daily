@@ -1,8 +1,11 @@
 import { Scheduler, clone, freshDocument, normalizeProgress, normalizedDictation, parseCSV, toCSV, deckId, reconcileProgress, TRACKS } from './core.js';
 import { ProgressDB, loadBundled, makeBackup, parseBackup, restorePoint, BACKUP_FORMAT } from './storage.js';
 import { DutchSpeech } from './speech.js';
+import { profileWorkspace, currentProfile, addProfile, renameProfile, profileName } from './profiles.js';
 const $ = id => document.getElementById(id);
-let state, db, scheduler, currentDeck, currentCard, speech, ready = false, locked = false;
+let workspace, state, db, scheduler, currentDeck, currentCard, speech, ready = false, locked = false;
+let profileAction = 'create';
+let profileEditToken = 0;
 let audioStarted = false, pendingImport = null, registration = null, offlineReady = false;
 let saveSerial = 0, toastTimer = null, installPrompt = null, reloadForUpdate = false;
 const modeLabel = mode => mode === 'listening' ? 'Listening + spelling' : 'Flashcards';
@@ -15,6 +18,7 @@ function showDialog(id) {
   for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
   if (id === 'settings-dialog') {
     renderVoices(); $('undo-import').hidden = !state?.restorePoint;
+    $('profile-caption').textContent = workspace ? `Current profile: ${currentProfile(workspace).name}. Each profile keeps its own decks, ratings, and settings on this device.` : '';
     $('reset-caption').textContent = state ? `${deckLabel(currentDeck)} · ${modeLabel(state.ui.mode)}. The other mode is kept.` : '';
   }
   $(id).showModal();
@@ -31,10 +35,54 @@ async function persist() {
   const serial = ++saveSerial;
   $('save-status').textContent = 'Saving on this device…';
   try {
-    await db.save(state);
+    currentProfile(workspace).data = state;
+    await db.save(workspace);
     if (serial === saveSerial) $('save-status').textContent = 'Saved on this device';
     return true;
   } catch (error) { block(error); return false; }
+}
+function renderProfiles() {
+  $('profile-select').replaceChildren(...workspace.profiles.map(p => new Option(p.name, p.id)));
+  $('profile-select').value = workspace.activeProfile;
+  $('profile-select').disabled = locked; $('new-profile').disabled = locked;
+}
+function switchProfile(id) {
+  if (!workspace || locked || id === workspace.activeProfile) return;
+  const next = workspace.profiles.find(p => p.id === id);
+  if (!next) return;
+  scheduler.save(); currentProfile(workspace).data = state;
+  workspace.activeProfile = id; state = next.data;
+  audioStarted = false; pendingImport = null; activate(); void persist();
+}
+function editProfile(action) {
+  if (!workspace || locked) return;
+  profileAction = action;
+  profileEditToken++;
+  $('profile-title').textContent = action === 'rename' ? 'Name your profile' : 'A fresh start, just for you.';
+  $('profile-name').value = action === 'rename' ? currentProfile(workspace).name : '';
+  $('profile-submit').textContent = action === 'rename' ? 'Save name' : 'Create profile';
+  $('profile-error').textContent = ''; $('profile-submit').disabled = false;
+  showDialog('profile-dialog'); $('profile-name').focus();
+}
+async function saveProfile() {
+  if (!workspace || locked || $('profile-submit').disabled) return;
+  const action = profileAction, token = profileEditToken;
+  $('profile-submit').disabled = true; $('profile-error').textContent = '';
+  try {
+    const name = profileName($('profile-name').value);
+    if (action === 'rename') renameProfile(workspace, name);
+    else {
+      const starter = await loadBundled();
+      if (token !== profileEditToken || !$('profile-dialog').open) return;
+      const profile = addProfile(workspace, name, starter);
+      scheduler.save(); currentProfile(workspace).data = state;
+      workspace.activeProfile = profile.id; state = profile.data; audioStarted = false; pendingImport = null;
+    }
+    $('profile-dialog').close();
+    if (action === 'rename') renderProfiles(); else activate();
+    if (await persist()) toast(`Profile saved: ${currentProfile(workspace).name}.`);
+  } catch (error) { $('profile-error').textContent = error.message; }
+  finally { if (token === profileEditToken) $('profile-submit').disabled = false; }
 }
 function renderDecks() {
   const options = state.decks.map(deck => new Option(`${deckLabel(deck)} · ${deck.cards.length}`, deck.id));
@@ -100,6 +148,7 @@ function showNext(fromGesture = false) {
   if (fromGesture && ((listening && audioStarted) || (!listening && state.ui.autoplay))) playAudio();
 }
 function activate(fromGesture = false) {
+  renderProfiles();
   currentDeck = state.decks.find(d => d.id === state.ui.deck) ?? state.decks[0];
   state.ui.deck = currentDeck.id;
   scheduler = new Scheduler(currentDeck.cards, currentDeck.progress, state.ui.mode);
@@ -159,7 +208,8 @@ function downloadFile(name, data, type = 'application/json') {
 function exportAll() {
   if (!state) { toast('There is no loaded progress to export yet.'); return; }
   scheduler?.save();
-  downloadFile(`dutch-daily-backup-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(makeBackup(state), null, 2));
+  const backup = { ...makeBackup(state), profile_name: workspace ? currentProfile(workspace).name : undefined };
+  downloadFile(`dutch-daily-backup-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(backup, null, 2));
 }
 function importSummary() {
   if (!pendingImport || pendingImport.kind !== 'progress') return;
@@ -189,9 +239,10 @@ async function readProgress(file) {
   $('target-deck-field').hidden = true; $('confirm-import').disabled = false;
   if (raw.format === BACKUP_FORMAT) {
     const imported = parseBackup(raw);
-    pendingImport = { kind: 'backup', state: imported };
+    const name = raw.profile_name === undefined ? null : profileName(raw.profile_name);
+    pendingImport = { kind: 'backup', state: imported, profileName: name };
     $('import-title').textContent = 'Restore full backup';
-    $('import-description').textContent = `Replace all current decks and progress with “${file.name}”.`;
+    $('import-description').textContent = `Replace all current decks and progress in “${currentProfile(workspace).name}” with “${file.name}”. Other profiles are kept.`;
     $('import-summary').textContent = imported.decks.map(d => `${deckLabel(d)} · ${d.cards.length} cards · both modes`).join('\n');
   } else {
     const named = typeof raw.deck === 'string' ? state.decks.find(d => d.id === deckId(raw.deck)) : null;
@@ -231,7 +282,11 @@ async function readCSVs(files) {
 async function applyImport() {
   if (!pendingImport || locked || $('confirm-import').disabled) return;
   scheduler.save(); const previous = restorePoint(state);
-  if (pendingImport.kind === 'backup') state = pendingImport.state;
+  if (pendingImport.kind === 'backup') {
+    state = pendingImport.state;
+    const name = pendingImport.profileName;
+    if (name && currentProfile(workspace).name === 'My progress' && !workspace.profiles.some(p => p.id !== workspace.activeProfile && p.name.toLowerCase() === name.toLowerCase())) renameProfile(workspace, name);
+  }
   else if (pendingImport.kind === 'progress') {
     const deck = state.decks.find(d => d.id === $('import-target').value), doc = clone(pendingImport.document);
     reconcileProgress(doc, deck.cards);
@@ -301,6 +356,10 @@ async function setupOffline() {
   }
 }
 function bindEvents() {
+  $('profile-select').addEventListener('change', () => switchProfile($('profile-select').value));
+  $('new-profile').addEventListener('click', () => editProfile('create'));
+  $('rename-profile').addEventListener('click', () => editProfile('rename'));
+  $('profile-form').addEventListener('submit', event => { event.preventDefault(); void saveProfile(); });
   $('flash-face').addEventListener('click', reveal); $('reveal-answer').addEventListener('click', reveal);
   $('play-audio').addEventListener('click', () => playAudio()); $('slow-audio').addEventListener('click', () => playAudio(true));
   $('dictation-form').addEventListener('submit', event => { event.preventDefault(); checkSpelling(); });
@@ -359,12 +418,9 @@ async function boot() {
   void setupOffline();
   try {
     db = await new ProgressDB().open();
-    state = await db.load();
-    if (!state) state = await loadBundled();
-    else {
-      const savedRestorePoint = state.restorePoint;
-      state = parseBackup(makeBackup(state)); state.restorePoint = savedRestorePoint;
-    }
+    const saved = await db.load();
+    workspace = profileWorkspace(saved || await loadBundled());
+    state = currentProfile(workspace).data;
     activate(); renderVoices();
     $('main-content').setAttribute('aria-busy', 'false');
     await persist();
